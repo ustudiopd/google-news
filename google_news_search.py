@@ -1,5 +1,8 @@
 import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLineEdit, QPushButton, QListWidget
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QDesktopServices
+from PyQt5.QtCore import QUrl
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -23,15 +26,25 @@ class NewsSearchApp(QWidget):
         layout.addWidget(self.search_button)
 
         self.results_list = QListWidget()
+        self.results_list.itemClicked.connect(self.open_news_link)
         layout.addWidget(self.results_list)
 
         self.setLayout(layout)
+        
+        # 기사 링크를 저장할 딕셔너리
+        self.news_links = {}
+
+    def open_news_link(self, item):
+        title = item.text()
+        if title in self.news_links:
+            QDesktopServices.openUrl(QUrl(self.news_links[title]))
 
     def search_news(self):
         query = self.search_input.text().strip()
         if not query:
             return
         self.results_list.clear()
+        self.news_links.clear()
 
         chrome_driver_path = r"C:\tools\chromedriver-win64\chromedriver.exe"
         options = webdriver.ChromeOptions()
@@ -53,6 +66,7 @@ class NewsSearchApp(QWidget):
             print(f"찾은 기사 수: {len(articles)}")
             for article in articles[:10]:
                 title = None
+                link = None
                 # 여러 선택자 시도
                 selectors = [
                     "h3",                # h3 태그
@@ -67,14 +81,24 @@ class NewsSearchApp(QWidget):
                             text = el.text.strip()
                             if text:
                                 title = text
+                                # 링크 찾기
+                                if el.tag_name == 'a':
+                                    link = el.get_attribute('href')
+                                else:
+                                    # a 태그가 아닌 경우 부모나 자식에서 링크 찾기
+                                    link_elements = el.find_elements(By.CSS_SELECTOR, "a")
+                                    if link_elements:
+                                        link = link_elements[0].get_attribute('href')
                                 break
-                        if title:
+                        if title and link:
                             break
                     except Exception as e:
                         continue
-                if title:
+                if title and link:
                     self.results_list.addItem(title)
+                    self.news_links[title] = link
                     print(f"추가된 제목: {title}")
+                    print(f"링크: {link}")
             if self.results_list.count() == 0:
                 self.results_list.addItem("검색 결과가 없습니다.")
         except Exception as e:
